@@ -1,5 +1,6 @@
 library(tidyverse)
 library(magrittr)
+library(cluster)
 
 # Data import ----
 
@@ -10,9 +11,36 @@ data1 %<>%
   filter(VISCODE == "bl")
 
 ## Combining both datasets and selecting relevant variables
-dataset %<>% 
-  inner_join(data1, data2, by = "RID") %>% 
-  select(RID, FDG, ABETA, PTAU, APOE4, PTGENDER, AGE, PTEDUCAT, DX) %>%
-  na.omit()
+dataset <- inner_join(data1, data2, by = "RID") %>% 
+  select(RID, FDG, ABETA, PTAU, APOE4, PTGENDER, AGE, PTEDUCAT, DX.bl) %>%
+  na.omit() %>% 
+  mutate(APOE4 = as.factor(APOE4),
+         PTGENDER = as.factor(PTGENDER),
+         DX = as.factor(DX.bl)) %>% 
+  mutate(DX = fct_collapse(DX, MCI = c("EMCI", "LMCI"))) %>% 
+  select(-DX.bl) 
 
 # Data description ----
+
+str(dataset)
+summary(dataset)
+
+dataset %>% 
+  select_if(is.numeric) %>% 
+  map(sd)
+
+dataset %>% 
+  select_if(is.factor) %>% 
+  map(table) %>% map(prop.table)
+
+# Cluster analysis ----
+
+?agnes
+datasetn <- dataset %>% 
+  select_if(is.numeric)
+agnclus <- agnes(datasetn, metric = "euclidean", 
+                 stand = FALSE, method="complete")
+# stand = FALSE porque no queremos estandarizar
+summary(agnclus)
+plot(agnclus, main=paste("Agnes:",agnclus$method,sep=""))
+agnclus$ac  
