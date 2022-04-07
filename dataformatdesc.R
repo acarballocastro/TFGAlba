@@ -20,6 +20,9 @@ dataset <- inner_join(data1, data2, by = "RID") %>%
   mutate(DX = fct_collapse(DX, MCI = c("EMCI", "LMCI"))) %>% 
   select(-DX.bl) 
 
+# Saving dataset for further use
+write_csv(dataset, "data/datasetADNI.csv")
+
 # Data description ----
 
 str(dataset)
