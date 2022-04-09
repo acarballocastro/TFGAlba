@@ -13,6 +13,10 @@ head(dataset)
 dataset$APOE4 = as.factor(dataset$APOE4)
 dataset$PTGENDER = as.factor(dataset$PTGENDER)
 dataset$DX = as.factor(dataset$DX)
+head(dataset)
+dataset$PTGENDER = unclass(dataset$PTGENDER)-1
+dataset$DX = unclass(dataset$DX)
+head(dataset)
 
 # Fixing covariables and response variable
 x_var <- c("FDG","ABETA","PTAU","APOE4","PTGENDER","AGE","PTEDUCAT")
