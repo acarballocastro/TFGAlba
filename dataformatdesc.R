@@ -17,8 +17,18 @@ dataset <- inner_join(data1, data2, by = "RID") %>%
   mutate(APOE4 = as.factor(APOE4),
          PTGENDER = as.factor(PTGENDER),
          DX = as.factor(DX.bl)) %>% 
-  mutate(DX = fct_collapse(DX, MCI = c("EMCI", "LMCI"))) %>% 
+  mutate(DX = fct_collapse(DX, MCI = c("EMCI", "LMCI")),
+         DXB = fct_collapse(DX, DP = c("MCI", "AD"))) %>% 
   select(-DX.bl) 
+
+## Coding factors
+dataset$PTGENDER = unclass(dataset$PTGENDER)-1
+dataset$PTGENDER = as.factor(dataset$PTGENDER)
+dataset$DX = unclass(dataset$DX)-1
+dataset$DX = as.factor(dataset$DX)
+dataset$DXB = unclass(dataset$DXB)-1
+dataset$DXB = as.factor(dataset$DXB)
+head(dataset)
 
 # Saving dataset for further use
 write_csv(dataset, "data/datasetADNI.csv")
@@ -41,7 +51,7 @@ dataset %>%
 ?agnes
 datasetn <- dataset %>% 
   select_if(is.numeric)
-agnclus <- agnes(datasetn, metric = "euclidean", 
+agnclus <- agnes(dataset, metric = "euclidean", 
                  stand = FALSE, method="complete")
 # stand = FALSE porque no queremos estandarizar
 summary(agnclus)
