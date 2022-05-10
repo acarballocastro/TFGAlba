@@ -90,16 +90,20 @@ sina_plot <- function(explanation) {
     ) +
     theme_minimal() + theme(
       axis.line.y = element_blank(), axis.ticks.y = element_blank(),
-      legend.position = "top", 
-      legend.title = element_text(size = 16), legend.text = element_text(size = 14), 
-      axis.title.y = element_text(size = 16), axis.text.y = element_text(size = 14),
-      axis.title.x = element_text(size = 16, vjust = -1), axis.text.x = element_text(size = 14)
+      legend.position = "right", 
+      legend.title = element_text(size = 14, angle = 90, vjust = 6, hjust = 0.6), 
+      legend.text = element_text(size = 12), 
+      axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 12),
+      axis.title.x = element_text(size = 14, vjust = -1), axis.text.x = element_text(size = 12),
+      plot.title = element_text(size = 18, hjust = 0.5)
     ) +
     scale_color_gradient(
-      low = "dark green"  , high = "sandybrown" , 
+      low = "darkgoldenrod2"  , high = "darkorchid4" , 
       breaks = c(0, 1), labels = c(" Low", "High "), 
-      guide = guide_colorbar(barwidth = 12, barheight = 0.3)
+      guide = guide_colorbar(barwidth = 0.3, barheight = 12,
+                             title.position = "right")
     ) +
-    labs(y = "Causal Shapley value (impact on model output)", 
+    labs(title = "Causal Shapley values",
+         y = "Shapley value (impact on model output)", 
          x = "", color = "Scaled feature value  ")
 }

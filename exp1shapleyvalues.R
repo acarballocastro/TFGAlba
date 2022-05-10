@@ -4,7 +4,7 @@ library(shapr)
 #library(ggforce)
 library(caret)
 library(xgboost)
-library(randomForest)
+library(ranger)
 
 # Installing the causally enhanced shapr package from source
 # devtools::install_local("shapr-master", dependencies = TRUE)
@@ -22,40 +22,30 @@ y_var <- "DXB" # Binary classification
 
 # Splitting in train-test (80%-20%) ----
 set.seed(2022)
-train_index <- caret::createDataPartition(dataset$DX, p = .8, list = FALSE, times = 1)
+train_index <- caret::createDataPartition(dataset$DXB, p = .8, list = FALSE, times = 1)
 
 # Training data
 x_train <- as.matrix(dataset[train_index, x_var])
 y_train_nc <- as.matrix(dataset[train_index, y_var]) # not centered
-y_train <- y_train_nc - mean(y_train_nc) # Tengo covariables categóricas
+#y_train <- y_train_nc - mean(y_train_nc) # Tengo covariables categóricas
 
 # Test data
 x_test <- as.matrix(dataset[-train_index, x_var])
 y_test_nc <- as.matrix(dataset[-train_index, y_var]) # not centered
-y_test <- y_test_nc - mean(y_train_nc) # Tengo covariables categóricas
-
-# Random forest ----
-
-dataset$APOE4 = as.factor(dataset$APOE4)
-dataset$PTGENDER = as.factor(dataset$PTGENDER)
-dataset$DX = as.factor(dataset$DX)
-head(dataset)
-
-modelrf <- randomForest(x = x_train, y = y_train_nc, ntree=500) 
-print(modelrf)
+#y_test <- y_test_nc - mean(y_train_nc) # Tengo covariables categóricas
 
 # XGBoost ----
 
-modelxgb <- xgboost(data = x_train, label = y_train, nround = 100, verbose = FALSE)
+modelxgb <- xgboost(data = x_train, label = y_train_nc, nround = 100, verbose = FALSE)
 print(modelxgb)
 
 # Shapley values ----
 
-explainer_symmetric <- shapr(x_train, modelxgb)                    
-p <- mean(y_train)
+explainer_symmetric <- shapr(x_train, modelxgb) 
+p <- mean(y_train_nc) # Expected prediction
 
-# a. We compute the causal Shapley values on a given partial order (see paper)
-partial_order <- list(1, c(2, 3), c(4:7)) # Poner el nuevo
+# a. We compute the causal Shapley values on a given partial order 
+partial_order <- list(c(5,4,6,7), c(2), c(1,3))
 
 explanation_causal <- explain(
   x_test,
@@ -63,7 +53,7 @@ explanation_causal <- explain(
   explainer = explainer_symmetric,
   prediction_zero = p,
   ordering = partial_order,
-  confounding = c(FALSE, TRUE, FALSE),
+  confounding = c(TRUE, FALSE, TRUE),
   seed = 2020
 )
 
@@ -83,11 +73,11 @@ explanation_marginal <- explain(
 )
 
 sina_marginal <- sina_plot(explanation_marginal) +
-  coord_flip(ylim = ylim_causal) + ylab("Marginal Shapley value (impact on model output)")
+  coord_flip(ylim = ylim_causal) + ggtitle("Marginal Shapley values")
 
 # c. Finally, we compute the asymmetric Shapley values for the same partial order
 explainer_asymmetric <- shapr(x_train, modelxgb, asymmetric = TRUE, ordering = partial_order)
-p <- mean(y_train)
+p <- mean(y_train_nc)
 
 explanation_asymmetric <- explain(
   x_test,
@@ -100,7 +90,7 @@ explanation_asymmetric <- explain(
 )
 
 sina_asymmetric <- sina_plot(explanation_asymmetric) +
-  coord_flip(ylim = ylim_causal) + ylab("Asymmetric conditional Shapley value (impact on model output)")
+  coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric conditional Shapley values")
 
 # d. Asymmetric causal Shapley values (very similar to the conditional ones)
 
@@ -111,28 +101,28 @@ explanation_asymmetric_causal <- explain(
   prediction_zero = p,
   asymmetric = TRUE,
   ordering = partial_order,
-  confounding = c(FALSE, TRUE, FALSE),
+  confounding = c(TRUE, FALSE, TRUE),
   seed = 2020
 )
 
 sina_asymmetric_causal <- sina_plot(explanation_asymmetric_causal) +
-  coord_flip(ylim = ylim_causal) + ylab("Asymmetric causal Shapley value (impact on model output)")
+  coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric causal Shapley values")
 
 # Scatter plot ----
 
 sv_correlation_df <- data.frame(
-  valtemp = x_test[, "temp"],
-  sv_marg_cosyear = explanation_marginal$dt$cosyear,
-  sv_caus_cosyear = explanation_causal$dt$cosyear,
-  sv_marg_temp = explanation_marginal$dt$temp,
-  sv_caus_temp = explanation_causal$dt$temp
+  valtemp = x_test[, "ABETA"],
+  sv_marg_FDG = explanation_marginal$dt$FDG,
+  sv_caus_FDG = explanation_causal$dt$FDG,
+  sv_marg_ABETA = explanation_marginal$dt$ABETA,
+  sv_caus_ABETA = explanation_causal$dt$ABETA
 )
 
 scatterplot_topleft <- 
-  ggplot(sv_correlation_df, aes(x = sv_marg_temp, y = sv_marg_cosyear, color = valtemp)) + 
-  geom_point(size = 1)+xlab("MSV temp")+ylab( "MSV cosyear")+
-  scale_x_continuous(limits = c(-1500, 1000), breaks = c(-1000, 0, 1000)) +
-  scale_y_continuous(limits = c(-500, 500), breaks = c(-500, 0, 500))  + 
+  ggplot(sv_correlation_df, aes(x = sv_marg_ABETA, y = sv_marg_FDG, color = valtemp)) + 
+  geom_point(size = 1)+xlab("MSV ABETA")+ylab("MSV FDG")+
+  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
+  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5))  + 
   scale_color_gradient(low="blue", high="red") +
   theme_minimal() + 
   theme(text = element_text(size = 12), 
@@ -140,31 +130,31 @@ scatterplot_topleft <-
         axis.ticks.x = element_blank(), axis.title.x = element_blank())
 
 scatterplot_topright <- 
-  ggplot(sv_correlation_df, aes(x = sv_caus_cosyear, y = sv_marg_cosyear, color = valtemp)) + 
+  ggplot(sv_correlation_df, aes(x = sv_caus_FDG, y = sv_marg_ABETA, color = valtemp)) + 
   geom_point(size = 1) + scale_color_gradient(low="blue", high="red") +
-  xlab("CSV cosyear") + ylab("MSV cosyear") + 
-  scale_x_continuous(limits = c(-1500, 1000), breaks = c(-1000, 0, 1000)) +
-  scale_y_continuous(limits = c(-500, 500), breaks = c(-500, 0, 500)) + 
+  xlab("CSV ABETA") + ylab("MSV ABETA") + 
+  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
+  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) + 
   theme_minimal() +
   theme(text = element_text(size=12), axis.title.x = element_blank(), axis.title.y=element_blank(),
         axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.y = element_blank(), axis.ticks.y = element_blank())
 
 scatterplot_bottomleft <- 
-  ggplot(sv_correlation_df, aes(x = sv_marg_temp, y = sv_caus_temp, color = valtemp)) +
+  ggplot(sv_correlation_df, aes(x = sv_marg_ABETA, y = sv_caus_ABETA, color = valtemp)) +
   geom_point(size = 1) + scale_color_gradient(low="blue", high="red") + 
-  ylab( "CSV temp") + xlab("MSV temp") +  
-  scale_x_continuous(limits = c(-1500, 1000), breaks = c(-1000, 0, 1000)) +
-  scale_y_continuous(limits = c(-1000, 1000), breaks = c(-500, 0, 500))  + 
+  ylab( "CSV ABETA") + xlab("MSV ABETA") +  
+  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
+  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5))  + 
   theme_minimal() +
   theme(text = element_text(size=12), 
         axis.text.x = element_text(size=12), axis.text.y = element_text(size=12))
 
 scatterplot_bottomright <- 
-  ggplot(sv_correlation_df, aes(x = sv_caus_cosyear, y = sv_caus_temp, color = valtemp)) +
-  geom_point(size = 1) + ylab("CSV temp") + xlab( "CSV cosyear") + 
-  scale_x_continuous(limits = c(-1500, 1000), breaks = c(-1000, 0, 1000)) +
-  scale_y_continuous(limits = c(-1000, 1000), breaks = c(-500, 0, 500))  + 
+  ggplot(sv_correlation_df, aes(x = sv_caus_FDG, y = sv_caus_ABETA, color = valtemp)) +
+  geom_point(size = 1) + ylab("CSV ABETA") + xlab( "CSV FDG") + 
+  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
+  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5))  + 
   scale_color_gradient(low="blue", high="red")+
   theme_minimal() +
   theme(text = element_text(size=12), axis.text.x=element_text(size=12),
@@ -214,3 +204,14 @@ bar_plots <- ggplot(dt_all, aes(x = name, y = value, group = interaction(date, n
         legend.title = element_text(size = 16), legend.text = element_text(size = 14),
         axis.text.x = element_text(size = 12), axis.text.y = element_text(size = 12),
         strip.text.x = element_text(size = 14))
+
+# Random forest ----
+
+# Factor variables converted
+dataset$APOE4 = as.factor(dataset$APOE4)
+dataset$PTGENDER = as.factor(dataset$PTGENDER)
+dataset$DXB = as.factor(dataset$DXB)
+head(dataset)
+
+modelrf <- ranger(x = x_train, y = y_train_nc, ntree=500) 
+print(modelrf)
