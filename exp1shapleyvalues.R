@@ -41,72 +41,65 @@ print(modelxgb)
 
 # Shapley values ----
 
+## Symmetric ----
+
 explainer_symmetric <- shapr(x_train, modelxgb) 
 p <- mean(y_train_nc) # Expected prediction
 
-# a. We compute the causal Shapley values on a given partial order 
+### Causal Shapley values ----
 partial_order <- list(c(5,4,6,7), c(2), c(1,3))
 
-explanation_causal <- explain(
-  x_test,
-  approach = "causal",
-  explainer = explainer_symmetric,
-  prediction_zero = p,
-  ordering = partial_order,
-  confounding = c(TRUE, FALSE, TRUE),
-  seed = 2020
-)
+explanation_causal <- explain(x_test, approach = "causal", 
+                              explainer = explainer_symmetric, 
+                              prediction_zero = p, ordering = partial_order,
+                              confounding = c(TRUE, FALSE, TRUE), seed = 2022)
 
 sina_causal <- sina_plot(explanation_causal)
 # save limits of sina_causal plot for comparing against marginal and asymmetric
 ylim_causal <- sina_causal$coordinates$limits$y
 
-# b. For computing marginal Shapley values, we assume one component with confounding
-explanation_marginal <- explain(
-  x_test,
-  approach = "causal",
-  explainer = explainer_symmetric,
-  prediction_zero = p,
-  ordering = list(c(1:7)),
-  confounding = TRUE,
-  seed = 2020
-)
+### Marginal Shapley values ----
+# Assumes one component with confounding
+explanation_marginal <- explain(x_test, approach = "causal",
+                                explainer = explainer_symmetric,
+                                prediction_zero = p, ordering = list(c(1:7)),
+                                confounding = TRUE, seed = 2020)
 
 sina_marginal <- sina_plot(explanation_marginal) +
   coord_flip(ylim = ylim_causal) + ggtitle("Marginal Shapley values")
 
-# c. Finally, we compute the asymmetric Shapley values for the same partial order
+## Asymmetric ----
+
 explainer_asymmetric <- shapr(x_train, modelxgb, asymmetric = TRUE, ordering = partial_order)
 p <- mean(y_train_nc)
 
-explanation_asymmetric <- explain(
-  x_test,
-  approach = "gaussian",
-  explainer = explainer_asymmetric,
-  prediction_zero = p,
-  ordering = partial_order,
-  asymmetric = TRUE,
-  seed = 2020
-)
+### Asymmetric Shapley values ----
+
+explanation_asymmetric <- explain(x_test, approach = "gaussian",
+                                  explainer = explainer_asymmetric,
+                                  prediction_zero = p, ordering = partial_order,
+                                  asymmetric = TRUE, seed = 2020)
 
 sina_asymmetric <- sina_plot(explanation_asymmetric) +
   coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric conditional Shapley values")
 
-# d. Asymmetric causal Shapley values (very similar to the conditional ones)
+### Asymmetric causal Shapley values ----
 
-explanation_asymmetric_causal <- explain(
-  x_test,
-  approach = "causal",
-  explainer = explainer_asymmetric,
-  prediction_zero = p,
-  asymmetric = TRUE,
-  ordering = partial_order,
-  confounding = c(TRUE, FALSE, TRUE),
-  seed = 2020
-)
+explanation_asymmetric_causal <- explain(x_test, approach = "causal",
+                                         explainer = explainer_asymmetric,
+                                         prediction_zero = p, asymmetric = TRUE,
+                                         ordering = partial_order,
+                                         confounding = c(TRUE, FALSE, TRUE),
+                                         seed = 2020)
 
 sina_asymmetric_causal <- sina_plot(explanation_asymmetric_causal) +
   coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric causal Shapley values")
+
+
+# Individual prediction explanations ----
+
+plot(explanation_asymmetric, plot_phi0 = FALSE, index_x_test = c(140))
+
 
 # Scatter plot ----
 
