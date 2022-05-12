@@ -4,13 +4,16 @@ library(shapr)
 #library(ggforce)
 library(caret)
 library(xgboost)
-library(ranger)
+library(patchwork)
 
 # Installing the causally enhanced shapr package from source
 # devtools::install_local("shapr-master", dependencies = TRUE)
 
-# For sina plotting capabilities
+# Plots
 source("extra/sina_plot.R")
+source("extra/indiv_plot.R")
+
+# Import and preprocessing ----
 
 dataset <- read_csv("data/datasetADNI.csv")
 dataset <- dataset[,-1] # Removing ID
@@ -20,31 +23,37 @@ head(dataset)
 x_var <- c("FDG","ABETA","PTAU","APOE4","PTGENDER","AGE","PTEDUCAT")
 y_var <- "DXB" # Binary classification
 
-# Splitting in train-test (80%-20%) ----
+# Splitting in train-test (80%-20%)
 set.seed(2022)
 train_index <- caret::createDataPartition(dataset$DXB, p = .8, list = FALSE, times = 1)
 
 # Training data
 x_train <- as.matrix(dataset[train_index, x_var])
-y_train_nc <- as.matrix(dataset[train_index, y_var]) # not centered
-#y_train <- y_train_nc - mean(y_train_nc) # Tengo covariables categóricas
+y_train <- as.matrix(dataset[train_index, y_var])
 
 # Test data
 x_test <- as.matrix(dataset[-train_index, x_var])
-y_test_nc <- as.matrix(dataset[-train_index, y_var]) # not centered
-#y_test <- y_test_nc - mean(y_train_nc) # Tengo covariables categóricas
+y_test <- as.matrix(dataset[-train_index, y_var]) 
 
-# XGBoost ----
+# Model: XGBoost
+# XGBoost requires classes to be in integer format
 
-modelxgb <- xgboost(data = x_train, label = y_train_nc, nround = 100, verbose = FALSE)
+# Parameters: binary/logistic classification (supported by shapr)
+params = list(
+  objective="binary:logistic",
+  eval_metric="error"
+)
+modelxgb <- xgboost(data = x_train, label = y_train, nround = 100, 
+                    verbose = FALSE, params = params)
 print(modelxgb)
+# predict(modelxgb, x_test)
 
 # Shapley values ----
 
 ## Symmetric ----
 
 explainer_symmetric <- shapr(x_train, modelxgb) 
-p <- mean(y_train_nc) # Expected prediction
+p <- mean(y_train) # Expected prediction
 
 ### Causal Shapley values ----
 partial_order <- list(c(5,4,6,7), c(2), c(1,3))
@@ -71,7 +80,7 @@ sina_marginal <- sina_plot(explanation_marginal) +
 ## Asymmetric ----
 
 explainer_asymmetric <- shapr(x_train, modelxgb, asymmetric = TRUE, ordering = partial_order)
-p <- mean(y_train_nc)
+p <- mean(y_train)
 
 ### Asymmetric Shapley values ----
 
@@ -95,11 +104,29 @@ explanation_asymmetric_causal <- explain(x_test, approach = "causal",
 sina_asymmetric_causal <- sina_plot(explanation_asymmetric_causal) +
   coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric causal Shapley values")
 
+# Showing all plots together
+(sina_causal + sina_marginal) / (sina_asymmetric + sina_asymmetric_causal)
 
 # Individual prediction explanations ----
 
-plot(explanation_asymmetric, plot_phi0 = FALSE, index_x_test = c(140))
+plot <- function(indiv, lim_inf = 0.25, lim_sup = 0.25){
+indiv_1 <- indiv_plot(explanation_causal, digits = 3, plot_phi0 = FALSE, 
+                      index_x_test = c(indiv)) +
+    coord_flip(ylim = c(-lim_inf, lim_sup))
+indiv_2 <- indiv_plot(explanation_marginal, digits = 3, plot_phi0 = FALSE, 
+                      index_x_test = c(indiv)) +
+  coord_flip(ylim = c(-lim_inf, lim_sup)) + labs(title = "Marginal Shapley values")
+indiv_3 <- indiv_plot(explanation_asymmetric, digits = 3, plot_phi0 = FALSE, 
+                      index_x_test = c(indiv)) +
+    coord_flip(ylim = c(-lim_inf, lim_sup)) + labs(title = "Asymmetric Shapley values")
+indiv_4 <- indiv_plot(explanation_asymmetric_causal, digits = 3, 
+           plot_phi0 = FALSE, index_x_test = c(indiv)) + 
+  coord_flip(ylim = c(-lim_inf, lim_sup)) + labs(title = "Asymmetric causal Shapley values")
 
+# Showing all plots together
+(indiv_1 + indiv_2) / (indiv_3 + indiv_4)}
+
+plot(28)
 
 # Scatter plot ----
 
@@ -198,13 +225,3 @@ bar_plots <- ggplot(dt_all, aes(x = name, y = value, group = interaction(date, n
         axis.text.x = element_text(size = 12), axis.text.y = element_text(size = 12),
         strip.text.x = element_text(size = 14))
 
-# Random forest ----
-
-# Factor variables converted
-dataset$APOE4 = as.factor(dataset$APOE4)
-dataset$PTGENDER = as.factor(dataset$PTGENDER)
-dataset$DXB = as.factor(dataset$DXB)
-head(dataset)
-
-modelrf <- ranger(x = x_train, y = y_train_nc, ntree=500) 
-print(modelrf)
