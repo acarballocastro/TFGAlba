@@ -16,11 +16,10 @@ source("extra/indiv_plot.R")
 # Import and preprocessing ----
 
 dataset <- read_csv("data/datasetADNI.csv")
-dataset <- dataset[,-1] # Removing ID
 head(dataset)
 
 # Fixing covariables and response variable
-x_var <- c("FDG","ABETA","PTAU","APOE4","PTGENDER","AGE","PTEDUCAT")
+x_var <- c("FDG","ABETA","PTAU","APOE4", "PTGENDER","AGE","PTEDUCAT")
 y_var <- "DXB" # Binary classification
 
 # Splitting in train-test (80%-20%)
@@ -43,12 +42,57 @@ params = list(
   objective="binary:logistic",
   eval_metric="error"
 )
+
+xgbcv <- xgb.cv(params = params, data = x_train, label = y_train, 
+                nrounds = 100, nfold = 5, showsd = T, stratified = T, 
+                print.every.n = 10, early.stop.round = 20, maximize = F)
 modelxgb <- xgboost(data = x_train, label = y_train, nround = 100, 
                     verbose = FALSE, params = params)
 print(modelxgb)
-# predict(modelxgb, x_test)
+
+# Model evaluation
+# Prediction
+pred_test = predict(modelxgb, x_test)
+
+# Converting to class: c = 0.5
+pred_test[(pred_test >= 0.5)] = 1
+pred_test[(pred_test < 0.5)] = 0
+
+# Creating confusion matrix
+confusion = confusionMatrix(as.factor(c(y_test)), as.factor(pred_test))
+print(confusion)
 
 # Shapley values ----
+
+## Dependent features ----
+explainer <- shapr(x_train, modelxgb) 
+p <- mean(y_train) # Expected prediction
+
+### Gaussian ----
+explanation_gaussian <- explain(x_test, approach = "gaussian", 
+                              explainer = explainer, prediction_zero = p, 
+                              seed = 2022)
+
+sina_gaussian <- sina_plot(explanation_gaussian) + 
+  ggtitle("Shapley values\nGaussian approach")
+# save limits of sina_gaussian plot for comparing against marginal and asymmetric
+ylim_gaussian <- sina_gaussian$coordinates$limits$y
+
+### Copula ----
+explanation_copula <- explain(x_test, approach = "copula", 
+                                explainer = explainer, prediction_zero = p, 
+                                seed = 2022)
+
+sina_copula <- sina_plot(explanation_copula) +
+  coord_flip(ylim = ylim_gaussian) + ggtitle("Shapley values\nCopula approach")
+
+### Empirical ----
+explanation_empirical <- explain(x_test, approach = "empirical", 
+                              explainer = explainer, prediction_zero = p, 
+                              seed = 2022)
+
+sina_empirical <- sina_plot(explanation_empirical) +
+  coord_flip(ylim = ylim_gaussian) + ggtitle("Shapley values\nEmpirical approach")
 
 ## Symmetric ----
 
@@ -127,101 +171,3 @@ indiv_4 <- indiv_plot(explanation_asymmetric_causal, digits = 3,
 (indiv_1 + indiv_2) / (indiv_3 + indiv_4)}
 
 plot(28)
-
-# Scatter plot ----
-
-sv_correlation_df <- data.frame(
-  valtemp = x_test[, "ABETA"],
-  sv_marg_FDG = explanation_marginal$dt$FDG,
-  sv_caus_FDG = explanation_causal$dt$FDG,
-  sv_marg_ABETA = explanation_marginal$dt$ABETA,
-  sv_caus_ABETA = explanation_causal$dt$ABETA
-)
-
-scatterplot_topleft <- 
-  ggplot(sv_correlation_df, aes(x = sv_marg_ABETA, y = sv_marg_FDG, color = valtemp)) + 
-  geom_point(size = 1)+xlab("MSV ABETA")+ylab("MSV FDG")+
-  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5))  + 
-  scale_color_gradient(low="blue", high="red") +
-  theme_minimal() + 
-  theme(text = element_text(size = 12), 
-        axis.text.x = element_blank(), axis.text.y = element_text(size = 12),
-        axis.ticks.x = element_blank(), axis.title.x = element_blank())
-
-scatterplot_topright <- 
-  ggplot(sv_correlation_df, aes(x = sv_caus_FDG, y = sv_marg_ABETA, color = valtemp)) + 
-  geom_point(size = 1) + scale_color_gradient(low="blue", high="red") +
-  xlab("CSV ABETA") + ylab("MSV ABETA") + 
-  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) + 
-  theme_minimal() +
-  theme(text = element_text(size=12), axis.title.x = element_blank(), axis.title.y=element_blank(),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-        axis.text.y = element_blank(), axis.ticks.y = element_blank())
-
-scatterplot_bottomleft <- 
-  ggplot(sv_correlation_df, aes(x = sv_marg_ABETA, y = sv_caus_ABETA, color = valtemp)) +
-  geom_point(size = 1) + scale_color_gradient(low="blue", high="red") + 
-  ylab( "CSV ABETA") + xlab("MSV ABETA") +  
-  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5))  + 
-  theme_minimal() +
-  theme(text = element_text(size=12), 
-        axis.text.x = element_text(size=12), axis.text.y = element_text(size=12))
-
-scatterplot_bottomright <- 
-  ggplot(sv_correlation_df, aes(x = sv_caus_FDG, y = sv_caus_ABETA, color = valtemp)) +
-  geom_point(size = 1) + ylab("CSV ABETA") + xlab( "CSV FDG") + 
-  scale_x_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5)) +
-  scale_y_continuous(limits = c(-0.5, 0.5), breaks = c(-0.5, 0, 0.5))  + 
-  scale_color_gradient(low="blue", high="red")+
-  theme_minimal() +
-  theme(text = element_text(size=12), axis.text.x=element_text(size=12),
-        axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank())
-
-grid_top <- ggarrange(scatterplot_topleft, scatterplot_topright, legend = "none")
-grid_bottom <- ggarrange(scatterplot_bottomleft, scatterplot_bottomright, legend = "none")
-
-# Bar plot ----
-
-# Get test set index for two data points with similar temperature
-# 1. 2012-10-09 (October)
-# 2. 2012-12-03 (December)
-
-october <- which(as.integer(row.names(x_test)) == which(bike$dteday == "2012-10-09"))
-december <- which(as.integer(row.names(x_test)) == which(bike$dteday == "2012-12-03"))
-
-# predicted values for the two points
-# predict(model, x_test)[c(october, december)] + mean(y_train_nc)
-
-dt_marginal <- explanation_marginal$dt %>%
-  dplyr::slice(c(october, december)) %>%
-  select(cosyear, temp) %>%
-  mutate(date = c("2012-10-09", "2012-12-03"), type = 'Marginal')
-
-dt_causal <- explanation_causal$dt %>%
-  dplyr::slice(c(october, december)) %>%
-  select(cosyear, temp) %>%
-  mutate(date = c("2012-10-09", "2012-12-03"), type = 'Causal')
-
-dt_asymmetric <- explanation_asymmetric$dt %>%
-  dplyr::slice(c(october, december)) %>%
-  select(cosyear, temp) %>%
-  mutate(date = c("2012-10-09", "2012-12-03"), type = 'Asymmetric')
-
-dt_all <- dt_marginal %>% pivot_longer(c(cosyear, temp)) %>%
-  rbind(dt_causal %>% pivot_longer(c(cosyear, temp))) %>%
-  rbind(dt_asymmetric %>% pivot_longer(c(cosyear, temp)))
-
-bar_plots <- ggplot(dt_all, aes(x = name, y = value, group = interaction(date, name), 
-                                fill = date, label = round(value, 2))) +
-  geom_col(position = "dodge") +
-  theme_classic() + ylab("Shapley value") +
-  facet_wrap(vars(type)) + theme(axis.title.x = element_blank()) +
-  scale_fill_manual(values = c('indianred4', 'ivory4')) + 
-  theme(legend.position = c(0.75, 0.25), axis.title = element_text(size = 20),
-        legend.title = element_text(size = 16), legend.text = element_text(size = 14),
-        axis.text.x = element_text(size = 12), axis.text.y = element_text(size = 12),
-        strip.text.x = element_text(size = 14))
-

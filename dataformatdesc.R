@@ -30,9 +30,6 @@ dataset$DXB = unclass(dataset$DXB)-1
 dataset$DXB = as.factor(dataset$DXB)
 head(dataset)
 
-# Saving dataset for further use
-write_csv(dataset, "data/datasetADNI.csv")
-
 # Data description ----
 
 str(dataset)
@@ -46,14 +43,12 @@ dataset %>%
   select_if(is.factor) %>% 
   map(table) %>% map(prop.table)
 
-# Cluster analysis ----
+# Finishing data preparation ----
 
-?agnes
-datasetn <- dataset %>% 
-  select_if(is.numeric)
-agnclus <- agnes(dataset, metric = "euclidean", 
-                 stand = FALSE, method="complete")
-# stand = FALSE porque no queremos estandarizar
-summary(agnclus)
-plot(agnclus, main=paste("Agnes:",agnclus$method,sep=""))
-agnclus$ac  
+head(dataset)
+
+# We remove the columns RID and DX
+dataset = dataset[-c(1,9)]
+
+# Saving dataset for further use
+write_csv(dataset, "data/datasetADNI.csv")

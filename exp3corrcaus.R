@@ -8,28 +8,21 @@ library(caret)
 library(xgboost)
 library(patchwork)
 
-# Plots
-source("extra/sina_plot.R")
-source("extra/indiv_plot.R")
-
-# Import and preprocessing
+# Import
 
 dataset <- read_csv("data/datasetADNI.csv")
 dataset <- dataset[,c(-1,-9)] # Removing ID and DX variable
 head(dataset)
 
 # Calculate a pairwise association between all variables in a data-frame. 
-# In particular nominal vs nominal with Chi-square, numeric vs numeric with 
+# In particular nominal vs nominal with Cramer's V, numeric vs numeric with 
 # Pearson correlation, and nominal vs numeric with ANOVA.
-# Adopted from https://stackoverflow.com/a/52557631/590437
-# https://stackoverflow.com/questions/52554336
+# Adopted from https://stackoverflow.com/questions/52554336
 
 mixed_assoc = function(df, cor_method="spearman", adjust_cramersv_bias=TRUE){
   df_comb = expand.grid(names(df), names(df),  stringsAsFactors = F) %>% set_names("X1", "X2")
   
   is_nominal = function(x) class(x) %in% c("factor", "character")
-  # https://community.rstudio.com/t/why-is-purr-is-numeric-deprecated/3559
-  # https://github.com/r-lib/rlang/issues/781
   is_numeric <- function(x) { is.integer(x) || is_double(x)}
   
   f = function(xName,yName) {
@@ -76,20 +69,5 @@ assocs <- dataset %>%
             column_to_rownames("x") %>%
             as.matrix 
 
-assocs2 = assocs
-
-assocs2[assocs > 0] <- assocs[assocs > 0] + 0.9*assocs[assocs > 0] 
-assocs2[assocs < 0] <- assocs[assocs < 0] + 0.9*assocs[assocs < 0]
-
 assocs = as_cordf(assocs)
-assocs2 = as_cordf(assocs2)
-
 network_plot(assocs, min_cor = 0, colours = c("indianred2", "white", "steelblue4"))
-
-# Otra opcion: pintar un grafo con las aristas del grosor equivalente, asi es más facil de visualizar
-# Pero tener en cuenta que las correlaciones siguen siendo muy débiles!!!!!
-
-# Grafo propuesto: {(PTGENDER, PTEDUCAT, AGE), (FGD, APOE4, ABETA, PTAU)} ???
-
-# Si todo bien: montar el XGBoost y sacar los 4 Shapley
-# Comparar con los 4 Shapley del experimento 1
