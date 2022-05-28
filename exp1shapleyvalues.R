@@ -37,15 +37,57 @@ y_test <- as.matrix(dataset[-train_index, y_var])
 # Model: XGBoost
 # XGBoost requires classes to be in integer format
 
+# Hyperparameter tuning
 # Parameters: binary/logistic classification (supported by shapr)
+# https://cran.r-project.org/web/packages/ParBayesianOptimization/vignettes/tuningHyperparameters.html
+
+hyper_tuning <- function(max_depth, min_child_weight, subsample) {
+  
+params = list(
+  objective="binary:logistic",
+  eval_metric="auc",
+  max_depth = max_depth, 
+  min_child_weight = min_child_weight, 
+  subsample = subsample
+)
+
+# 10-fold cross validation
+xgbcv <- xgb.cv(params = params, data = x_train, label = y_train, 
+                nrounds = 100, nfold = 10, prediction = T, showsd = T, 
+                early.stop.round = 20, maximize = F, verbose = 0)
+
+return(
+  list( 
+    Score = max(xgbcv$evaluation_log$test_auc_mean)
+    , nrounds = xgbcv$best_iteration
+  )
+)
+}
+
+library("ParBayesianOptimization")
+bounds <- list( 
+  max_depth = c(2L, 10L)
+  , min_child_weight = c(1, 25)
+  , subsample = c(0.25, 1)
+)
+
+optObj <- bayesOpt(
+  FUN = hyper_tuning
+  , bounds = bounds
+  , initPoints = 4
+  , iters.n = 3
+)
+
+optObj$scoreSummary
+getBestPars(optObj)
+
+# Model training
+
 params = list(
   objective="binary:logistic",
   eval_metric="error"
 )
 
-xgbcv <- xgb.cv(params = params, data = x_train, label = y_train, 
-                nrounds = 100, nfold = 5, showsd = T, stratified = T, 
-                print.every.n = 10, early.stop.round = 20, maximize = F)
 modelxgb <- xgboost(data = x_train, label = y_train, nround = 100, 
                     verbose = FALSE, params = params)
 print(modelxgb)
@@ -128,10 +170,10 @@ p <- mean(y_train)
 
 ### Asymmetric Shapley values ----
 
-explanation_asymmetric <- explain(x_test, approach = "gaussian",
+explanation_asymmetric <- explain(x_test, approach = "causal",
                                   explainer = explainer_asymmetric,
-                                  prediction_zero = p, ordering = partial_order,
-                                  asymmetric = TRUE, seed = 2020)
+                                  prediction_zero = p, ordering = list(c(1:7)),
+                                  confounding = TRUE, asymmetric = TRUE, seed = 2020)
 
 sina_asymmetric <- sina_plot(explanation_asymmetric) +
   coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric conditional Shapley values")

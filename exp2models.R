@@ -33,8 +33,8 @@ x_test <- as.matrix(dataset[-train_index, x_var])
 y_test <- as.matrix(dataset[-train_index, y_var])
 
 # Factor variables converted
-dataset$APOE4 = as.factor(dataset$APOE4)
-dataset$PTGENDER = as.factor(dataset$PTGENDER)
+# dataset$APOE4 = as.factor(dataset$APOE4)
+# dataset$PTGENDER = as.factor(dataset$PTGENDER)
 dataset$DXB = as.factor(dataset$DXB)
 head(dataset)
 
@@ -42,17 +42,11 @@ head(dataset)
 data_train <- dataset[train_index,]
 data_test <- dataset[-train_index,]
 
-# # x and y with factors
-# x_train_df <- dataset[train_index, x_var]
-# y_train_df <- dataset[train_index, y_var]
-# x_test_df <- dataset[-train_index, x_var]
-# y_test_df <- dataset[-train_index, y_var]
-
 # Model: Random forest ----
 
 # NO da error pero tarda demasiado -> no tengo capacidad computacional
 
-modelrf <- ranger(DXB ~ ., data = data_train[-c(9,10)], probability = TRUE)
+modelrf <- ranger(DXB ~ ., data = data_train, probability = TRUE)
 print(modelrf)
 
 # Model evaluation
@@ -106,10 +100,10 @@ p <- mean(y_train)
 
 #### Asymmetric Shapley values ----
 
-explanation_asymmetric <- explain(x_test, approach = "gaussian",
+explanation_asymmetric <- explain(x_test, approach = "causal",
                                   explainer = explainer_asymmetric,
-                                  prediction_zero = p, ordering = partial_order,
-                                  asymmetric = TRUE, seed = 2020)
+                                  prediction_zero = p, ordering = list(c(1:7)),
+                                  confounding = TRUE, asymmetric = TRUE, seed = 2020)
 
 sina_asymmetric <- sina_plot(explanation_asymmetric) +
   coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric conditional Shapley values")
@@ -157,16 +151,21 @@ plot(28)
 # No puede tratar las variables como factores
 
 dataset <- read_csv("data/datasetADNI.csv")
-dataset <- dataset[,c(-4)] # Removing ID and DX variable
 data_train <- dataset[train_index,]
 data_test <- dataset[-train_index,]
+
+# x and y with factors
+x_train_df <- dataset[train_index, x_var]
+y_train_df <- dataset[train_index, y_var]
+x_test_df <- dataset[-train_index, x_var]
+y_test_df <- dataset[-train_index, y_var]
 
 modelglm <- glm(DXB ~ ., data = data_train, family = binomial)
 print(modelglm)
 
 # Model evaluation
 # Prediction
-pred_test = predict(modelglm, data_test, type = "response")
+pred_test = predict(modelglm, x_test_df, type = "response")
 
 # Converting to class: c = 0.5
 pred_test[(pred_test > 0.5)] = 1
@@ -175,7 +174,6 @@ pred_test[(pred_test < 0.5)] = 0
 # Creating confusion matrix
 confusion = confusionMatrix(as.factor(c(y_test)), as.factor(pred_test))
 print(confusion)
-
 
 ## Shapley values ----
 
@@ -214,10 +212,10 @@ p <- mean(y_train)
 
 #### Asymmetric Shapley values ----
 
-explanation_asymmetric <- explain(x_test, approach = "gaussian",
+explanation_asymmetric <- explain(x_test, approach = "causal",
                                   explainer = explainer_asymmetric,
-                                  prediction_zero = p, ordering = partial_order,
-                                  asymmetric = TRUE, seed = 2020)
+                                  prediction_zero = p, ordering = list(c(1:7)),
+                                  confounding = TRUE, asymmetric = TRUE, seed = 2020)
 
 sina_asymmetric <- sina_plot(explanation_asymmetric) +
   coord_flip(ylim = ylim_causal) + ggtitle("Asymmetric conditional Shapley values")
