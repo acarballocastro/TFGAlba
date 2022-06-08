@@ -41,45 +41,45 @@ y_test <- as.matrix(dataset[-train_index, y_var])
 # Parameters: binary/logistic classification (supported by shapr)
 # https://cran.r-project.org/web/packages/ParBayesianOptimization/vignettes/tuningHyperparameters.html
 
-hyper_tuning <- function(max_depth, min_child_weight, subsample) {
-  
-params = list(
-  objective="binary:logistic",
-  eval_metric="auc",
-  max_depth = max_depth, 
-  min_child_weight = min_child_weight, 
-  subsample = subsample
-)
-
-# 10-fold cross validation
-xgbcv <- xgb.cv(params = params, data = x_train, label = y_train, 
-                nrounds = 100, nfold = 10, prediction = T, showsd = T, 
-                early.stop.round = 20, maximize = F, verbose = 0)
-
-return(
-  list( 
-    Score = max(xgbcv$evaluation_log$test_auc_mean)
-    , nrounds = xgbcv$best_iteration
-  )
-)
-}
-
-library("ParBayesianOptimization")
-bounds <- list( 
-  max_depth = c(2L, 10L)
-  , min_child_weight = c(1, 25)
-  , subsample = c(0.25, 1)
-)
-
-optObj <- bayesOpt(
-  FUN = hyper_tuning
-  , bounds = bounds
-  , initPoints = 4
-  , iters.n = 3
-)
-
-optObj$scoreSummary
-getBestPars(optObj)
+# hyper_tuning <- function(max_depth, min_child_weight, subsample) {
+#   
+# params = list(
+#   objective="binary:logistic",
+#   eval_metric="auc",
+#   max_depth = max_depth, 
+#   min_child_weight = min_child_weight, 
+#   subsample = subsample
+# )
+# 
+# # 10-fold cross validation
+# xgbcv <- xgb.cv(params = params, data = x_train, label = y_train, 
+#                 nrounds = 100, nfold = 10, prediction = T, showsd = T, 
+#                 early.stop.round = 20, maximize = F, verbose = 0)
+# 
+# return(
+#   list( 
+#     Score = max(xgbcv$evaluation_log$test_auc_mean)
+#     , nrounds = xgbcv$best_iteration
+#   )
+# )
+# }
+# 
+# library("ParBayesianOptimization")
+# bounds <- list( 
+#   max_depth = c(2L, 10L)
+#   , min_child_weight = c(1, 25)
+#   , subsample = c(0.25, 1)
+# )
+# 
+# optObj <- bayesOpt(
+#   FUN = hyper_tuning
+#   , bounds = bounds
+#   , initPoints = 4
+#   , iters.n = 3
+# )
+# 
+# optObj$scoreSummary
+# getBestPars(optObj)
 
 # Model training
 
@@ -115,7 +115,13 @@ explanation_gaussian <- explain(x_test, approach = "gaussian",
                               explainer = explainer, prediction_zero = p, 
                               seed = 2022)
 
-sina_gaussian <- sina_plot(explanation_gaussian) + 
+# Removing categorical variables
+gaussian_cuant = NULL
+gaussian_cuant$x_test = explanation_gaussian$x_test[,-c(4,5)]
+gaussian_cuant$dt = explanation_gaussian$dt[,-c(5,6)]
+gaussian_cuant$p = explanation_gaussian$p
+
+sina_gaussian <- sina_plot(gaussian_cuant) + 
   ggtitle("Shapley values\nGaussian approach")
 # save limits of sina_gaussian plot for comparing against marginal and asymmetric
 ylim_gaussian <- sina_gaussian$coordinates$limits$y
@@ -125,7 +131,13 @@ explanation_copula <- explain(x_test, approach = "copula",
                                 explainer = explainer, prediction_zero = p, 
                                 seed = 2022)
 
-sina_copula <- sina_plot(explanation_copula) +
+# Removing categorical variables
+copula_cuant = NULL
+copula_cuant$x_test = explanation_copula$x_test[,-c(4,5)]
+copula_cuant$dt = explanation_copula$dt[,-c(5,6)]
+copula_cuant$p = explanation_copula$p
+
+sina_copula <- sina_plot(copula_cuant) +
   coord_flip(ylim = ylim_gaussian) + ggtitle("Shapley values\nCopula approach")
 
 ### Empirical ----
@@ -195,7 +207,7 @@ sina_asymmetric_causal <- sina_plot(explanation_asymmetric_causal) +
 
 # Individual prediction explanations ----
 
-plot <- function(indiv, lim_inf = 0.25, lim_sup = 0.25){
+plot <- function(indiv, lim_inf = 0.2, lim_sup = 0.35){
 indiv_1 <- indiv_plot(explanation_causal, digits = 3, plot_phi0 = FALSE, 
                       index_x_test = c(indiv)) +
     coord_flip(ylim = c(-lim_inf, lim_sup))
@@ -212,4 +224,5 @@ indiv_4 <- indiv_plot(explanation_asymmetric_causal, digits = 3,
 # Showing all plots together
 (indiv_1 + indiv_2) / (indiv_3 + indiv_4)}
 
-plot(28)
+# predict(modelxgb, x_test)
+plot(54)
