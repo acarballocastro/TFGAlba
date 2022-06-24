@@ -1,5 +1,5 @@
-# Final Degree Project
+# Bachelor's Degree Final Project
 
-Explainable Machine Learning: local interpretability measures
+Explainability and Causality in Machine Learning through Shapley values
 
 Alba Carballo Castro
